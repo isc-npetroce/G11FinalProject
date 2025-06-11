@@ -15,6 +15,9 @@ def load_dataset_from_hf():
     return df
 
 # Loads data from the given dataframe into the vector DB, as in workshop 7.
+# TODO add metadata for filtering, at least on patient name
+# TODO delete data from db before re-adding
+# https://docs.trychroma.com/docs/collections/delete-data
 def load_data_into_vectordb(df, data_column = "CLINICAL_NOTES_NONULL"):
     # starting with all-MiniLM as this was used in week 7
     model = SentenceTransformer("all-MiniLM-L6-v2")

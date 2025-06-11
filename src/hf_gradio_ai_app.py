@@ -26,6 +26,7 @@ LANGCHAIN_LLM = None
 LANGCHAIN_PROMPT_TEMPLATE = None
 INITIAL_AI_SETUP_MESSAGE = "" # To store status/error from initial setup
 
+# TODO customize for RAG, based on this notebook: https://colab.research.google.com/drive/1G5YiHIDZzRG9AcUMiNd9MITowaNHUKyK?usp=sharing
 def initialize_ai_components():
     """
     Initializes LangChain components (LLM and prompt template) using the API key
@@ -67,6 +68,13 @@ def initialize_ai_components():
 # --- Attempt to initialize AI components when the script loads ---
 AI_INITIALIZED_SUCCESSFULLY = initialize_ai_components()
 
+#TODO stub
+# this function should retrieve a RAG response based on the user's input & metadata filters
+# should be called at some point by ai_chat_response_function
+def get_rag_response(user_message:str, metadata_filters:dict):
+    pass
+
+# TODO add RAG
 def ai_chat_response_function(user_message, chat_history):
     """
     This is the core function called by Gradio's ChatInterface.
@@ -92,6 +100,10 @@ def ai_chat_response_function(user_message, chat_history):
         print(f"Error during LangChain invocation: {e}") # Log for server-side debugging
         return f"Sorry, an error occurred while trying to get a response: {str(e)}"
 
+
+# TODO
+# Add UI elements for selecting metadata filters, at least free text for patient name.
+# Stretch goal: Add UI element to allow customization of system prompt for specific output format
 # --- Gradio Interface Definition using gr.Blocks for layout control ---
 with gr.Blocks(theme=gr.themes.Soft(primary_hue=gr.themes.colors.blue, secondary_hue=gr.themes.colors.sky), title="AI Chatbot (Gradio)") as gradio_app:
     gr.Markdown(
