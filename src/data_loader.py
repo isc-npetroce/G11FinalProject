@@ -6,8 +6,8 @@ from chromadb.config import Settings
 # loads our final project dataset from HuggingFace
 def load_dataset_from_hf():
     # Grab dataset CSV from Aditi's repository
-    dataset_url = "https://huggingface.co/datasets/asarathy/patient_encounters1_notes/blob/main/patient_encounters1_notes.csv"
-    df = pd.read_csv(dataset_url)
+    dataset_url = "https://huggingface.co/datasets/asarathy/patient_encounters1_notes/raw/main/patient_encounters1_notes.csv"
+    df = pd.read_csv(dataset_url, on_bad_lines="warn")
     df['CLINICAL_NOTES_NONULL'] = df['CLINICAL_NOTES'].fillna('')
     df['CLINICAL_NOTES_LEMMATIZED_JOINED'] = df['CLINICAL_NOTES_CLEAN_LEMMATIZED'].map(lambda x: ' '.join(x))
     return df
