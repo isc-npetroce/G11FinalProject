@@ -4,6 +4,12 @@ import chromadb
 from chromadb.config import Settings
 import ast
 
+# helper function to wrap both load_dataset_from_hf and load_data_into_vectordb 
+def load_vector_db( data_column = "CLINICAL_NOTES_NONULL",metadata_columns = ['PATIENT_ID', 'FIRST', 'ENCOUNTER_ID']):
+    dataset = load_dataset_from_hf()
+    collection = load_data_into_vectordb(dataset, data_column,metadata_columns)
+    return collection
+
 # loads our final project dataset from HuggingFace
 def load_dataset_from_hf():
     # Grab dataset CSV from Aditi's repository
