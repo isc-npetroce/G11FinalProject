@@ -14,8 +14,11 @@
 import gradio as gr
 from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
+from langchain.schema.runnable import RunnablePassthrough
+from langchain.schema.output_parser import StrOutputParser
 import os
 from dotenv import load_dotenv
+from data_loader import load_vector_db
 
 # --- Load environment variables from .env file ---
 load_dotenv()
@@ -26,7 +29,7 @@ LANGCHAIN_LLM = None
 LANGCHAIN_PROMPT_TEMPLATE = None
 INITIAL_AI_SETUP_MESSAGE = "" # To store status/error from initial setup
 
-# TODO customize for RAG, based on this notebook: https://colab.research.google.com/drive/1G5YiHIDZzRG9AcUMiNd9MITowaNHUKyK?usp=sharing
+# https://colab.research.google.com/drive/1G5YiHIDZzRG9AcUMiNd9MITowaNHUKyK?usp=sharing
 def initialize_ai_components():
     """
     Initializes LangChain components (LLM and prompt template) using the API key
@@ -46,12 +49,13 @@ def initialize_ai_components():
         # Define the prompt template for the LLM
         prompt_template_str = """
         You are a helpful, friendly, and insightful AI assistant.
-        Answer the user's question clearly, concisely, and in a conversational tone.
-        If you don't know the answer or a question is ambiguous, ask for clarification or state that you don't know.
+        Your task is to summarize the clinical notes for a specified patient. If there are no clinical notes provided, let the user know that there is no info for the provided name, and ask them to check if a valid one was provided. 
 
-        User Question: {user_input}
+        Patient Name: {patient_name}
 
-        AI Response:
+        Clinical Notes: {clinical_notes}
+
+        AI Summary:
         """
         LANGCHAIN_PROMPT_TEMPLATE = ChatPromptTemplate.from_template(prompt_template_str)
         
@@ -68,14 +72,20 @@ def initialize_ai_components():
 # --- Attempt to initialize AI components when the script loads ---
 AI_INITIALIZED_SUCCESSFULLY = initialize_ai_components()
 
-#TODO stub
-# this function should retrieve a RAG response based on the user's input & metadata filters
-# should be called at some point by ai_chat_response_function
-def get_rag_response(user_message:str, metadata_filters:dict):
-    pass
+#TODO expand to take more metadata like id, encounter etc, for now just using patient name to filter
+def get_rag_response(patient_name:str): 
+    collection = load_vector_db()
 
-# TODO add RAG
-def ai_chat_response_function(user_message, chat_history):
+    retreival_results = collection.get(
+        where={"FIRST": patient_name},
+    )
+
+    doc_content = '\n\n'.join(str(doc) for doc in retreival_results['documents'])
+    #metdata = retreival_results['metadatas'][0]
+
+    return doc_content
+
+def ai_chat_response_function(patient_name, chat_history):
     """
     This is the core function called by Gradio's ChatInterface.
     It takes the user's message and the chat history, and returns the AI's response string.
@@ -89,13 +99,18 @@ def ai_chat_response_function(user_message, chat_history):
     # Proceed with generating response if components are ready
     try:
         # Create the LangChain chain (Prompt + LLM)
-        chain = LANGCHAIN_PROMPT_TEMPLATE | LANGCHAIN_LLM
+        chain = ( 
+            {"clinical_notes": get_rag_response, "patient_name": RunnablePassthrough() } 
+            | LANGCHAIN_PROMPT_TEMPLATE 
+            | LANGCHAIN_LLM 
+            | StrOutputParser()
+        )
         
         # Invoke the chain with the user's input
-        ai_response = chain.invoke({"user_input": user_message})
+        ai_response = chain.invoke(patient_name)
         
         # Return the content of the AI's response
-        return ai_response.content
+        return ai_response
     except Exception as e:
         print(f"Error during LangChain invocation: {e}") # Log for server-side debugging
         return f"Sorry, an error occurred while trying to get a response: {str(e)}"
@@ -131,7 +146,7 @@ with gr.Blocks(theme=gr.themes.Soft(primary_hue=gr.themes.colors.blue, secondary
             type='messages'
         ),
         textbox=gr.Textbox(
-            placeholder="Type your message here and press Enter...",
+            placeholder="Enter patient name",
             show_label=False,
             scale=7,
             # Disable textbox if AI did not initialize successfully
