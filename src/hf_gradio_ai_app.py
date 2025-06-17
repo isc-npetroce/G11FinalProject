@@ -19,6 +19,7 @@ from langchain.schema.output_parser import StrOutputParser
 import os
 from dotenv import load_dotenv
 from data_loader import load_vector_db
+import time
 
 # --- Load environment variables from .env file ---
 load_dotenv()
@@ -129,6 +130,7 @@ def ai_chat_response_function(user_query, _, field_name, field_value):
     """
     This is the core function called by Gradio's ChatInterface.
     """
+    
     if not AI_INITIALIZED_SUCCESSFULLY or not LANGCHAIN_LLM or not LANGCHAIN_PROMPT_TEMPLATE:
         # Use the globally set error message from initialization
         # Clean up HTML for plain error string if needed, or pass raw if Markdown supports it
@@ -137,6 +139,8 @@ def ai_chat_response_function(user_query, _, field_name, field_value):
 
     # Proceed with generating response if components are ready
     try:
+        # record start time
+        time_start = time.time()
         # Create the LangChain chain
         chain = ( 
             {"clinical_notes": get_rag_response, "user_query": get_user_query, "field_name": get_field_name, "field_value": get_field_value} 
@@ -154,6 +158,12 @@ def ai_chat_response_function(user_query, _, field_name, field_value):
         ai_response = chain.invoke(input_map)
         
         # Return the content of the AI's response
+        # record end time
+        time_end = time.time()
+        # calculate the duration
+        time_duration = time_end - time_start
+        # report the duration
+        print(f'Took {time_duration:.3f} seconds')
         return ai_response
     except Exception as e:
         print(f"Error during LangChain invocation: {e}") # Log for server-side debugging
