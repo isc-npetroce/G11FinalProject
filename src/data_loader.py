@@ -5,7 +5,7 @@ from chromadb.config import Settings
 import ast
 
 # helper function to wrap both load_dataset_from_hf and load_data_into_vectordb 
-def load_vector_db(data_column = "CLINICAL_NOTES_NONULL", metadata_columns = ['PATIENT_ID', 'FIRST', 'ENCOUNTER_ID']):
+def load_vector_db(data_column = "CLINICAL_NOTES_NONULL", metadata_columns = ['Patient ID', 'Patient Name', 'Encounter ID']):
     dataset = load_dataset_from_hf()
     collection = load_data_into_vectordb(dataset, data_column, metadata_columns)
     return collection
@@ -22,11 +22,16 @@ def load_dataset_from_hf():
     # second is our cleaned notes from Week 6. Unfortunately our tokenization breaks the input format for the sentence transformer,
     # so we naively join the cleaned text back into single documents by joining on ' '.
     df['CLINICAL_NOTES_LEMMATIZED_JOINED'] = df['CLINICAL_NOTES_CLEAN_LEMMATIZED'].apply(lambda x: ' '.join(ast.literal_eval(x)) if isinstance(x, str) else '')
+    df = df.rename(columns={
+        'PATIENT_ID': 'Patient ID',
+        'FIRST': 'Patient Name',
+        'ENCOUNTER_ID': 'Encounter ID'
+    })
     return df
 
 # Loads data from the given dataframe into the vector DB, as in workshop 7.
 # https://docs.trychroma.com/docs/collections/delete-data
-def load_data_into_vectordb(df, data_column = "CLINICAL_NOTES_NONULL", metadata_columns = ['PATIENT_ID', 'FIRST', 'ENCOUNTER_ID']):
+def load_data_into_vectordb(df, data_column = "CLINICAL_NOTES_NONULL", metadata_columns = ['Patient ID', 'Patient Name', 'Encounter ID']):
     # starting with all-MiniLM as this was used in week 7
     model = SentenceTransformer("all-MiniLM-L6-v2")
     client = chromadb.Client(Settings(

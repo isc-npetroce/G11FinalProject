@@ -1,4 +1,4 @@
-# gradio_ai_chatbot_dotenv.py
+# hf_gradio_ai_app.py
 #
 # To run this script:
 # 1. Create a .env file in the same directory with your OPENAI_API_KEY.
@@ -7,7 +7,7 @@
 # 2. Install the required packages:
 #    pip install gradio langchain openai langchain_openai python-dotenv
 # 3. Run the script from your terminal:
-#    python gradio_ai_chatbot_dotenv.py
+#    python hf_gradio_ai_app.py
 #
 # The script will output a local URL and potentially a public Gradio link.
 
@@ -49,9 +49,12 @@ def initialize_ai_components():
         # Define the prompt template for the LLM
         prompt_template_str = """
         You are a helpful, friendly, and insightful AI assistant.
-        Your task is to summarize the clinical notes for a specified patient. If there are no clinical notes provided, let the user know that there is no info for the provided name, and ask them to check if a valid one was provided. 
+        Your task is to summarize the clinical notes for one or many patients (if the name is not specified, it if for many). The user query might also specify additional instructions -- if there is a different task requested, answer that instead of simply summarizing the Clinical Notes. 
+        If there are no clinical notes provided, let the user know that there is no info for the provided input and ask them to check if valid details were provided. 
 
-        Patient Name: {patient_name}
+        User query: {user_query}
+
+        {field_name}: {field_value}
 
         Clinical Notes: {clinical_notes}
 
@@ -72,23 +75,59 @@ def initialize_ai_components():
 # --- Attempt to initialize AI components when the script loads ---
 AI_INITIALIZED_SUCCESSFULLY = initialize_ai_components()
 
-#TODO expand to take more metadata like id, encounter etc, for now just using patient name to filter
-def get_rag_response(patient_name:str): 
+
+def get_rag_response(input_map):
+    user_query = input_map['user_query']
+    field_name = input_map['field_name']
+    field_value = input_map['field_value']
+
     collection = load_vector_db()
 
-    retreival_results = collection.get(
-        where={"FIRST": patient_name},
-    )
+    joined_docs = ""
 
-    doc_content = '\n\n'.join(str(doc) for doc in retreival_results['documents'])
-    #metdata = retreival_results['metadatas'][0]
+    if user_query and field_value:
+        retrieval_results = collection.query(
+            query_texts=user_query,
+            n_results=10,
+            where={field_name: field_value},
+        )
+        joined_docs = '\n\n'.join(retrieval_results['documents'][0])
 
-    return doc_content
+    elif not field_value:
+        retrieval_results = collection.query(
+            query_texts=user_query,
+            n_results=10,
+        )
+        joined_docs = '\n\n'.join(retrieval_results['documents'][0])
 
-def ai_chat_response_function(patient_name, chat_history):
+    else:
+        retreival_results1 = collection.get(
+            where={field_name: field_value},
+        )
+        joined_docs = '\n\n'.join(str(doc) for doc in retreival_results1['documents'])
+
+    print("User query: ", user_query)
+
+    print("\nJoined docs: ", joined_docs)
+
+    return joined_docs
+
+
+def get_user_query(input_map):
+    return input_map['user_query']
+
+
+def get_field_name(input_map):
+    return input_map['field_name']
+
+
+def get_field_value(input_map):
+    return input_map['field_value']
+
+
+def ai_chat_response_function(user_query, _, field_name, field_value):
     """
     This is the core function called by Gradio's ChatInterface.
-    It takes the user's message and the chat history, and returns the AI's response string.
     """
     if not AI_INITIALIZED_SUCCESSFULLY or not LANGCHAIN_LLM or not LANGCHAIN_PROMPT_TEMPLATE:
         # Use the globally set error message from initialization
@@ -98,16 +137,21 @@ def ai_chat_response_function(patient_name, chat_history):
 
     # Proceed with generating response if components are ready
     try:
-        # Create the LangChain chain (Prompt + LLM)
+        # Create the LangChain chain
         chain = ( 
-            {"clinical_notes": get_rag_response, "patient_name": RunnablePassthrough() } 
+            {"clinical_notes": get_rag_response, "user_query": get_user_query, "field_name": get_field_name, "field_value": get_field_value} 
             | LANGCHAIN_PROMPT_TEMPLATE 
             | LANGCHAIN_LLM 
             | StrOutputParser()
         )
         
         # Invoke the chain with the user's input
-        ai_response = chain.invoke(patient_name)
+        input_map = {
+            'user_query': user_query,
+            'field_name': field_name,
+            'field_value': field_value 
+        }
+        ai_response = chain.invoke(input_map)
         
         # Return the content of the AI's response
         return ai_response
@@ -116,16 +160,11 @@ def ai_chat_response_function(patient_name, chat_history):
         return f"Sorry, an error occurred while trying to get a response: {str(e)}"
 
 
-# TODO
-# Add UI elements for selecting metadata filters, at least free text for patient name.
-# Stretch goal: Add UI element to allow customization of system prompt for specific output format
-# --- Gradio Interface Definition using gr.Blocks for layout control ---
 with gr.Blocks(theme=gr.themes.Soft(primary_hue=gr.themes.colors.blue, secondary_hue=gr.themes.colors.sky), title="AI Chatbot (Gradio)") as gradio_app:
     gr.Markdown(
         """
-        # 🤖 AI Chatbot with Gradio, LangChain & OpenAI
+        # 🤖 AI Clinical Notes Summarizer. 
         Powered by OpenAI's `gpt-4o-mini` model.
-        OpenAI API Key is loaded from your `.env` file.
         """
     )
 
@@ -139,37 +178,38 @@ with gr.Blocks(theme=gr.themes.Soft(primary_hue=gr.themes.colors.blue, secondary
     chat_interface_component = gr.ChatInterface(
         fn=ai_chat_response_function, # The function that handles chat logic
         chatbot=gr.Chatbot(
-            height=550,
+            height=350,
             show_label=False,
             placeholder="AI's responses will appear here." if AI_INITIALIZED_SUCCESSFULLY else "AI is not available. Check setup status above.",
             avatar_images=("https://raw.githubusercontent.com/svgmoji/svgmoji/main/packages/svgmoji__openmoji/svg/1F468-1F3FB-200D-1F9B0.svg", "https://raw.githubusercontent.com/gradio-app/gradio/main/gradio/icons/huggingface-logo.svg"),
             type='messages'
         ),
         textbox=gr.Textbox(
-            placeholder="Enter patient name",
+            placeholder="Enter your query",
             show_label=False,
-            scale=7,
             # Disable textbox if AI did not initialize successfully
             interactive=AI_INITIALIZED_SUCCESSFULLY
         ),
-        submit_btn="➡️ Send" if AI_INITIALIZED_SUCCESSFULLY else None, # Hide button if not ready
-        examples=[
-            "What is Paris, France known for?",
-            "Explain the concept of a Large Language Model (LLM) simply.",
-            "Can you give me a basic recipe for brownies?",
-            "Tell me an interesting fact about sunflowers."
-        ] if AI_INITIALIZED_SUCCESSFULLY else None, # Only show examples if AI is ready
+        submit_btn="➡️ Send",
         title=None,
-        autofocus=True
+        autofocus=True,
+        additional_inputs=[
+            gr.Dropdown(
+                choices=['Patient ID', 'Patient Name', 'Encounter ID'],
+                label="Select Field Name",
+                value="Patient Name",  # Default selected value
+                interactive=AI_INITIALIZED_SUCCESSFULLY
+            ),
+            gr.Textbox(
+                placeholder="Enter Field Value",
+                show_label=False,
+                # Disable textbox if AI did not initialize successfully
+                interactive=AI_INITIALIZED_SUCCESSFULLY
+            )
+        ],
     )
     
-    # If AI initialization failed, you might want to make the ChatInterface non-interactive.
-    # One way is to conditionally enable/disable components or hide buttons as done above.
     if not AI_INITIALIZED_SUCCESSFULLY:
-        # Further disable parts of the chat interface if needed, though ChatInterface
-        # doesn't have a simple 'interactive=False' for the whole thing.
-        # Hiding buttons and disabling textbox is a good start.
-        # The error message in `ai_chat_response_function` will also prevent interaction.
         pass
 
 
