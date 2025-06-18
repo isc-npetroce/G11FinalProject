@@ -22,6 +22,8 @@ def load_dataset_from_hf():
     # second is our cleaned notes from Week 6. Unfortunately our tokenization breaks the input format for the sentence transformer,
     # so we naively join the cleaned text back into single documents by joining on ' '.
     df['CLINICAL_NOTES_LEMMATIZED_JOINED'] = df['CLINICAL_NOTES_CLEAN_LEMMATIZED'].apply(lambda x: ' '.join(ast.literal_eval(x)) if isinstance(x, str) else '')
+    df['PATIENT_ID'] = df['PATIENT_ID'].astype(str)
+    df['ENCOUNTER_ID'] = df['ENCOUNTER_ID'].astype(str)
     df = df.rename(columns={
         'PATIENT_ID': 'Patient ID',
         'FIRST': 'Patient Name',

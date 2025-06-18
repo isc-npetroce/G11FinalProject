@@ -91,24 +91,51 @@ def get_rag_response(input_map):
             n_results=10,
             where={field_name: field_value},
         )
-        joined_docs = '\n\n'.join(retrieval_results['documents'][0])
+        documents = retrieval_results['documents'][0]
+        metadatas = retrieval_results["metadatas"][0]
+
+        combined = [
+            f"{metadata.get('Patient Name', 'Unknown')} - {doc}"
+            for doc, metadata in zip(documents, metadatas)
+        ]
+
+        joined_docs = "\n\n".join(combined)
 
     elif not field_value:
         retrieval_results = collection.query(
             query_texts=user_query,
             n_results=10,
         )
-        joined_docs = '\n\n'.join(retrieval_results['documents'][0])
+        documents = retrieval_results['documents'][0]
+        metadatas = retrieval_results["metadatas"][0]
+
+        combined = [
+            f"{metadata.get('Patient Name', 'Unknown')} - {doc}"
+            for doc, metadata in zip(documents, metadatas)
+        ]
+
+        joined_docs = "\n\n".join(combined)
 
     else:
         retreival_results1 = collection.get(
             where={field_name: field_value},
         )
-        joined_docs = '\n\n'.join(str(doc) for doc in retreival_results1['documents'])
+        
+        documents = retreival_results1["documents"]     # list of strings
+        metadatas = retreival_results1["metadatas"]     # list of dicts
+
+        combined = [
+            f"{metadata.get('Patient Name', 'Unknown')} - {doc}"
+            for doc, metadata in zip(documents, metadatas)
+        ]
+
+        joined_docs = "\n\n".join(combined)
 
     print("User query: ", user_query)
 
     print("\nJoined docs: ", joined_docs)
+
+    print("\nmetadatas: ", metadatas)
 
     return joined_docs
 
